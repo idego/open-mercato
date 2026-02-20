@@ -591,7 +591,6 @@ export default function EditDefinitionsPage({ params }: { params?: { entityId?: 
           {translateDef && (
             <TranslationManager
               mode="embedded"
-              compact
               entityType="entities:custom_field_def"
               recordId={`${translateDef.entityId}:${translateDef.def.key}`}
               baseValues={translateBaseValues}
