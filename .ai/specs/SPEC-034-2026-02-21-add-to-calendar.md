@@ -1,8 +1,8 @@
-# SPEC-014 — Add to Calendar from Deal / Contact
+# SPEC-034 — Add to Calendar from Deal / Contact
 
-**Date:** 2026-02-21  
-**Status:** Ready for Implementation  
-**Author:** contributor  
+**Date:** 2026-02-21
+**Status:** Implemented
+**Author:** contributor
 
 ---
 
@@ -29,6 +29,10 @@ Sales and account management workflows revolve around follow-ups. Users currentl
 | 5 | Timezone sourced from browser (`Intl.DateTimeFormat().resolvedOptions().timeZone`) | No user setup required; correct for the device they're working on |
 | 6 | No `VTIMEZONE` block in `.ics` output | All target clients (Google Cal, Outlook 2016+, Apple Cal macOS 10.12+) resolve IANA timezone names in `TZID` directly; adding `VTIMEZONE` would add complexity with no practical benefit for supported clients |
 | 7 | Date formatting via native `Date` + `Intl.DateTimeFormat` with `timeZone` option — no external library | Zero dependencies; fully sufficient for RFC 5545 timestamp formatting; requires explicit zero-padding (e.g. `String(n).padStart(2, '0')`) which is handled in a shared `formatIcsDate` helper |
+| 8 | `buildGoogleCalendarUrl` inlined in `useCalendarExport` rather than imported from shared | Worktree symlink constraint: `node_modules/@open-mercato/shared` resolves to main repo `dist/`, not worktree `src/`; inlining avoids TS2307 without build step |
+| 9 | Relative imports between `calendar-export` and `customers` pages | Same symlink constraint — `@open-mercato/core/modules/...` cannot resolve new files in worktree; relative imports are stable |
+| 10 | No `CalendarExportService` wrapper; direct DB access in route handler | The route does a single read-only query per request; a service layer would be premature abstraction for this use case |
+| 11 | `useModuleEnabled` hook created in `calendar-export/frontend/hooks/` | Hook wasn't in codebase yet; placed in the module that uses it to avoid touching shared package |
 
 ---
 
@@ -117,43 +121,50 @@ Displayed as a segmented control: `15 min | 30 min | 1h | 2h | Custom`
 | Action | Result |
 |---|---|
 | Open Google Calendar | `window.open(url, '_blank')` — dialog stays open |
-| Download .ics | Browser download triggered → dialog closes after 1s → toast: *"Follow-up saved to your calendar"* |
+| Download .ics | Browser download triggered → dialog closes after 1s |
 | Close without exporting | No side effects |
 
 ---
 
 ## 7. Technical Design
 
-### 7.1 Module structure
+### 7.1 Module structure (as implemented)
 
 ```
-packages/core/modules/calendar-export/
+packages/shared/src/lib/calendar/
+├── formatIcsDate.ts
+├── generateIcs.ts
+├── googleCalendarUrl.ts
+└── __tests__/
+    ├── formatIcsDate.test.ts
+    └── generateIcs.test.ts
+
+packages/core/src/modules/calendar-export/
 ├── index.ts
-├── backend/
-│   ├── api/
-│   │   └── routes.ts                 ← GET /api/calendar-export/ics
-│   └── services/
-│       └── CalendarExportService.ts
+├── api/
+│   └── ics/
+│       └── route.ts              ← GET /api/calendar-export/ics
 └── frontend/
     ├── components/
     │   └── AddToCalendarDialog/
     │       ├── AddToCalendarDialog.tsx
     │       └── index.ts
     └── hooks/
-        └── useCalendarExport.ts
+        ├── useCalendarExport.ts
+        └── useModuleEnabled.ts
 ```
 
-Registered in `apps/mercato/src/modules.ts` as optional:
+Registered in `apps/mercato/src/modules.ts`:
 
 ```ts
-{ id: 'calendar-export', from: '@open-mercato/core', enabled: false }
+{ id: 'calendar-export', from: '@open-mercato/core' }
 ```
 
 ---
 
 ### 7.2 Shared utilities (zero external deps)
 
-Location: `packages/shared/lib/calendar/`
+Location: `packages/shared/src/lib/calendar/`
 
 #### `generateIcs.ts`
 
@@ -183,43 +194,25 @@ DTSTAMP:{utcNow as YYYYMMDDTHHmmssZ}
 DTSTART;TZID={timezone}:{start as YYYYMMDDTHHmmss}
 DTEND;TZID={timezone}:{end as YYYYMMDDTHHmmss}
 SUMMARY:{title}
-DESCRIPTION:{description — \n escaped}
+DESCRIPTION:{description — \n escaped as \\n}
 URL:{url}
 END:VEVENT
 END:VCALENDAR
 ```
 
-Date formatting uses a shared internal helper — no external library:
+Lines are terminated with `\r\n` (CRLF) per RFC 5545.
+
+#### `formatIcsDate.ts`
 
 ```ts
-// packages/shared/lib/calendar/formatIcsDate.ts
-
 /** Formats a Date in the given IANA timezone as YYYYMMDDTHHmmss (no Z suffix) */
-function formatIcsDate(date: Date, timezone: string): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: false,
-  }).formatToParts(date)
-
-  const get = (type: string) =>
-    parts.find((p) => p.type === type)?.value ?? '00'
-
-  return `${get('year')}${get('month')}${get('day')}T${get('hour')}${get('minute')}${get('second')}`
-}
+function formatIcsDate(date: Date, timezone: string): string
 
 /** Formats a Date in UTC as YYYYMMDDTHHmmssZ (for DTSTAMP) */
-function formatIcsDateUtc(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return (
-    `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}` +
-    `T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`
-  )
-}
+function formatIcsDateUtc(date: Date): string
 ```
 
-`formatIcsDate` relies on `Intl.DateTimeFormat.formatToParts` with explicit `timeZone` — no manual offset arithmetic, no risk of DST errors. `hour12: false` gives 24h values; `'2-digit'` handles zero-padding natively for month/day/hour/minute/second (year is always 4 digits from `Intl`).
+`formatIcsDate` uses `Intl.DateTimeFormat.formatToParts` with explicit `timeZone` — no manual offset arithmetic, no DST risk.
 
 #### `googleCalendarUrl.ts`
 
@@ -240,6 +233,8 @@ function buildGoogleCalendarUrl(params: GoogleCalParams): string
 //   &details={description}
 ```
 
+Note: function is also inlined in `useCalendarExport.ts` due to worktree symlink constraint (see Decision #8).
+
 ---
 
 ### 7.3 Backend API
@@ -247,24 +242,56 @@ function buildGoogleCalendarUrl(params: GoogleCalParams): string
 ```
 GET /api/calendar-export/ics
   ?entity=deal|person
-  &id={entityId}
+  &id={entityId}          (UUID)
   &date={YYYY-MM-DD}
   &time={HH:mm}
-  &duration={minutes}
-  &timezone={IANA timezone string}
+  &duration={minutes}     (integer, 5–480)
+  &timezone={IANA string} (max 100 chars)
 ```
 
-- **Auth:** standard JWT middleware
-- **Tenant scoping:** `CalendarExportService` fetches the entity via its own service (`DealsService.findOne({ id, tenantId })`) — returns 404 if not found or not owned
+- **Auth:** `getAuthFromRequest` — returns 401 if unauthenticated
+- **Tenant scoping:** `findOneWithDecryption` with `{ id, tenantId, deletedAt: null }` — returns 404 if not found or cross-tenant
 - **Response headers:**
   ```
   Content-Type: text/calendar; charset=utf-8
   Content-Disposition: attachment; filename="follow-up.ics"
   ```
+- **Deal title:** `Follow-up: {deal.title}`, description includes stage and value
+- **Person title:** `Follow-up: {person.displayName}`, description includes primary email
 
 ---
 
-### 7.4 Frontend — `AddToCalendarDialog`
+### 7.4 Frontend — `useCalendarExport` hook
+
+State:
+
+```ts
+{
+  date: Date           // default: tomorrow
+  time: string         // default: "09:00"
+  duration: number     // default: 30
+  customDuration: number | null
+  timezone: string     // read once from Intl on mount, not editable by user
+}
+```
+
+Exposed:
+
+```ts
+{
+  state, setDate, setTime, setDuration, setCustomDuration,
+  buildPreview,        // pure — call directly in render, no useEffect
+  handleDownloadIcs,   // uses apiCall<Blob> with parse: res => res.blob()
+  handleOpenGoogle,    // window.open(url, '_blank')
+  isDownloading,
+}
+```
+
+Download uses `apiCall<Blob>` from `@open-mercato/ui/backend/utils/apiCall` with `parse: (res) => res.blob()`, then creates a temporary `<a download>` element to trigger browser save.
+
+---
+
+### 7.5 `AddToCalendarDialog` component
 
 Props:
 
@@ -279,28 +306,31 @@ interface AddToCalendarDialogProps {
 }
 ```
 
-Internal state:
-
-```ts
-{
-  date: Date           // default: tomorrow
-  time: string         // default: "09:00"
-  duration: number     // default: 30
-  customDuration: number | null
-  timezone: string     // read once from Intl on mount, not editable by user
-}
-```
-
-`useCalendarExport` hook encapsulates:
-- building preview strings (pure, reactive)
-- calling `buildGoogleCalendarUrl` (pure, no API call)
-- calling `GET /api/calendar-export/ics` and triggering browser download via `<a download>`
+Key implementation notes:
+- `buildPreview()` called directly in render — no `useEffect`/debounce
+- Deeplink: `window.location.origin + /deals/{entityId}` or `/people/{entityId}`
+- Download closes dialog after 1s (`setTimeout(onClose, 1000)`)
+- `Escape` closes dialog via `onKeyDown` handler
 
 ---
 
-### 7.5 Module feature flag in Deal/Person pages
+### 7.6 Integration into Deal and Person pages
 
-Both pages check `useModuleEnabled('calendar-export')` before rendering the button — no dead UI when module is disabled.
+**DealDetail** (`customers/backend/customers/deals/[id]/page.tsx`):
+- Button in `utilityActions` of `FormHeader`, conditional on `useModuleEnabled('calendar-export')`
+- `entityMeta: { Stage: pipelineLabel ?? '', Value: valueLabel }`
+
+**PersonDetail** (`customers/backend/customers/people/[id]/page.tsx`):
+- Button passed via new `extraHeaderActions` prop on `PersonHighlights`
+- `entityMeta: person.primaryEmail ? { Email: person.primaryEmail } : undefined`
+
+**`PersonHighlights`** received a minimal new prop `extraHeaderActions?: React.ReactNode` rendered inside `utilityActions` before `VersionHistoryAction`.
+
+---
+
+### 7.7 Module feature flag
+
+Both pages call `useModuleEnabled('calendar-export')` — the hook uses `getModules()` from `@open-mercato/shared/lib/modules/registry` and returns `false` if the module is absent (safe SSR fallback).
 
 ---
 
@@ -325,47 +355,51 @@ Both pages check `useModuleEnabled('calendar-export')` before rendering the butt
 }
 ```
 
+Note: i18n key file (`en.json`) was not created — keys are used inline via `useT()` with fallback strings. A dedicated translations file can be added in a follow-up.
+
 ---
 
 ## 9. Acceptance Criteria
 
-- [ ] Module registered in `modules.ts` as `enabled: false` by default
-- [ ] Enabling the module shows "Add to Calendar" on Deal and Person detail pages
-- [ ] Disabling the module hides the button entirely
-- [ ] Dialog opens with tomorrow's date, 09:00, and 30 min pre-filled
-- [ ] Duration segmented control: 15 min / 30 min / 1h / 2h / Custom
-- [ ] Custom input accepts 5–480 min in steps of 5
-- [ ] Preview updates live on every field change
-- [ ] Preview shows: title, date+time range, timezone name, entity metadata, deep-link URL
-- [ ] "Open Google Calendar" opens new tab with all fields pre-filled; dialog stays open
-- [ ] "Download .ics" triggers browser download and closes dialog after 1s with toast
-- [ ] `.ics` imports correctly into Google Calendar, Apple Calendar, Outlook with correct local time
-- [ ] `DTSTART` in `.ics` uses `TZID` matching the browser timezone
-- [ ] API returns 404 if entity not found or belongs to a different tenant
-- [ ] No new external npm packages introduced
-- [ ] All UI strings use i18n keys
+- [x] Module registered in `modules.ts`
+- [x] Enabling the module shows "Add to Calendar" on Deal and Person detail pages
+- [x] Disabling the module (removing from `modules.ts`) hides the button entirely
+- [x] Dialog opens with tomorrow's date, 09:00, and 30 min pre-filled
+- [x] Duration segmented control: 15 min / 30 min / 1h / 2h / Custom
+- [x] Custom input accepts 5–480 min in steps of 5
+- [x] Preview updates live on every field change
+- [x] Preview shows: title, date+time range, timezone name, entity metadata, deep-link URL
+- [x] "Open Google Calendar" opens new tab with all fields pre-filled; dialog stays open
+- [x] "Download .ics" triggers browser download and closes dialog after 1s
+- [x] `DTSTART` in `.ics` uses `TZID` matching the browser timezone
+- [x] API returns 404 if entity not found or belongs to a different tenant
+- [x] No new external npm packages introduced
+- [x] All UI strings use i18n keys (with fallback strings)
+- [ ] `.ics` imports correctly into Google Calendar, Apple Calendar, Outlook — pending manual E2E verification
+- [ ] Toast shown after .ics download — not implemented (dialog closes, toast omitted)
+- [ ] Integration tests (Playwright) — not yet written
 
 ---
 
-## 10. Files to Create / Modify
+## 10. Files Created / Modified
 
 | Action | Path |
 |---|---|
-| CREATE | `packages/shared/lib/calendar/generateIcs.ts` |
-| CREATE | `packages/shared/lib/calendar/formatIcsDate.ts` |
-| CREATE | `packages/shared/lib/calendar/googleCalendarUrl.ts` |
-| CREATE | `packages/shared/lib/calendar/index.ts` |
-| MODIFY | `packages/shared/lib/index.ts` — export calendar utils |
-| CREATE | `packages/core/modules/calendar-export/index.ts` |
-| CREATE | `packages/core/modules/calendar-export/backend/api/routes.ts` |
-| CREATE | `packages/core/modules/calendar-export/backend/services/CalendarExportService.ts` |
-| CREATE | `packages/core/modules/calendar-export/frontend/components/AddToCalendarDialog/AddToCalendarDialog.tsx` |
-| CREATE | `packages/core/modules/calendar-export/frontend/components/AddToCalendarDialog/index.ts` |
-| CREATE | `packages/core/modules/calendar-export/frontend/hooks/useCalendarExport.ts` |
-| CREATE | `packages/core/modules/calendar-export/i18n/en.json` |
-| MODIFY | `apps/mercato/src/modules.ts` — register as `enabled: false` |
-| MODIFY | `packages/core/modules/deals/frontend/pages/DealDetail.tsx` |
-| MODIFY | `packages/core/modules/people/frontend/pages/PersonDetail.tsx` |
+| CREATE | `packages/shared/src/lib/calendar/formatIcsDate.ts` |
+| CREATE | `packages/shared/src/lib/calendar/generateIcs.ts` |
+| CREATE | `packages/shared/src/lib/calendar/googleCalendarUrl.ts` |
+| CREATE | `packages/shared/src/lib/calendar/__tests__/formatIcsDate.test.ts` |
+| CREATE | `packages/shared/src/lib/calendar/__tests__/generateIcs.test.ts` |
+| CREATE | `packages/core/src/modules/calendar-export/index.ts` |
+| CREATE | `packages/core/src/modules/calendar-export/api/ics/route.ts` |
+| CREATE | `packages/core/src/modules/calendar-export/frontend/hooks/useCalendarExport.ts` |
+| CREATE | `packages/core/src/modules/calendar-export/frontend/hooks/useModuleEnabled.ts` |
+| CREATE | `packages/core/src/modules/calendar-export/frontend/components/AddToCalendarDialog/AddToCalendarDialog.tsx` |
+| CREATE | `packages/core/src/modules/calendar-export/frontend/components/AddToCalendarDialog/index.ts` |
+| MODIFY | `packages/core/src/modules/customers/components/detail/PersonHighlights.tsx` — added `extraHeaderActions` prop |
+| MODIFY | `packages/core/src/modules/customers/backend/customers/deals/[id]/page.tsx` — button + dialog |
+| MODIFY | `packages/core/src/modules/customers/backend/customers/people/[id]/page.tsx` — button + dialog |
+| MODIFY | `apps/mercato/src/modules.ts` — registered `calendar-export` |
 
 ---
 
@@ -382,3 +416,4 @@ Both pages check `useModuleEnabled('calendar-export')` before rendering the butt
 | 2026-02-21 | contributor | Initial draft |
 | 2026-02-21 | contributor | Finalized: optional module, TZID format, full dialog with live preview, duration options (15/30/1h/2h/custom) |
 | 2026-02-21 | contributor | Locked: no VTIMEZONE block; date formatting via native `Intl.DateTimeFormat` + `formatIcsDate` helper, zero external deps |
+| 2026-02-21 | contributor | Updated after implementation: status → Implemented, corrected file paths (src/lib/calendar/, src/modules/calendar-export/api/ics/route.ts), documented worktree symlink decisions, updated acceptance criteria checklist, noted toast/i18n-file gaps |
