@@ -47,6 +47,8 @@ import { createCustomerNotesAdapter } from '../../../../components/detail/notesA
 import { readMarkdownPreferenceCookie, writeMarkdownPreferenceCookie } from '../../../../lib/markdownPreference'
 import { InjectionSpot, useInjectionWidgets } from '@open-mercato/ui/backend/injection/InjectionSpot'
 import { DetailTabsLayout } from '../../../../components/detail/DetailTabsLayout'
+import { AddToCalendarDialog } from '../../../../../calendar-export/frontend/components/AddToCalendarDialog'
+import { useModuleEnabled } from '../../../../../calendar-export/frontend/hooks/useModuleEnabled'
 
 type PersonOverview = {
   person: {
@@ -117,6 +119,8 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
   const [activeTab, setActiveTab] = React.useState<SectionKey>(initialTab)
   const [sectionAction, setSectionAction] = React.useState<SectionAction | null>(null)
   const [isDeleting, setIsDeleting] = React.useState(false)
+  const [calendarOpen, setCalendarOpen] = React.useState(false)
+  const calendarExportEnabled = useModuleEnabled('calendar-export')
 
   const handleSectionActionChange = React.useCallback((action: SectionAction | null) => {
     setSectionAction(action)
@@ -680,6 +684,16 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
             }}
             onDelete={handleDelete}
             isDeleting={isDeleting}
+            extraHeaderActions={calendarExportEnabled ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setCalendarOpen(true)}
+              >
+                {t('calendar_export.button', 'Add to Calendar')}
+              </Button>
+            ) : undefined}
             onCompanySave={async (next) => {
               const normalized = typeof next === 'string' && next.trim().length ? next.trim() : null
               await savePerson(
@@ -837,6 +851,16 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
 
         </PageBody>
         {ConfirmDialogElement}
+        {calendarExportEnabled && (
+          <AddToCalendarDialog
+            open={calendarOpen}
+            onClose={() => setCalendarOpen(false)}
+            entity="person"
+            entityId={person.id}
+            entityName={person.displayName}
+            entityMeta={person.primaryEmail ? { Email: person.primaryEmail } : undefined}
+          />
+        )}
       </Page>
     )
   }
