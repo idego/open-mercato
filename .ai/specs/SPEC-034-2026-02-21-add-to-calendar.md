@@ -33,6 +33,9 @@ Sales and account management workflows revolve around follow-ups. Users currentl
 | 9 | Relative imports between `calendar-export` and `customers` pages | Same symlink constraint — `@open-mercato/core/modules/...` cannot resolve new files in worktree; relative imports are stable |
 | 10 | No `CalendarExportService` wrapper; direct DB access in route handler | The route does a single read-only query per request; a service layer would be premature abstraction for this use case |
 | 11 | `useModuleEnabled` hook created in `calendar-export/frontend/hooks/` | Hook wasn't in codebase yet; placed in the module that uses it to avoid touching shared package |
+| 12 | `ModulesContext` placed in `packages/shared/src/lib/frontend/` (not in `calendar-export`) | Importing from `@open-mercato/core` in `apps/mercato/backend/layout.tsx` caused a circular dependency; `@open-mercato/shared` already has wildcard exports, so the new file is auto-exported with no `package.json` changes |
+| 13 | Pass `modules.map(m => ({ id: m.id }))` to `ModulesProvider` instead of full module objects | Full module objects contain a `loader` function which Next.js cannot serialize when crossing the Server→Client boundary, producing "Functions cannot be passed directly to Client Components" |
+| 14 | All source edits must be made in main repo `src/` (not worktree `src/`) | Turbopack resolves packages via `node_modules` symlinks pointing to the main repo, not the worktree; changes to worktree `src/` files are invisible to Turbopack in dev mode |
 
 ---
 
@@ -330,7 +333,7 @@ Key implementation notes:
 
 ### 7.7 Module feature flag
 
-Both pages call `useModuleEnabled('calendar-export')` — the hook uses `getModules()` from `@open-mercato/shared/lib/modules/registry` and returns `false` if the module is absent (safe SSR fallback).
+Both pages call `useModuleEnabled('calendar-export')`. The hook reads from a React Context (`ModulesContext`) populated by `ModulesProvider` in `apps/mercato/src/app/(backend)/backend/layout.tsx`. The server component passes `modules.map(m => ({ id: m.id }))` — stripping non-serializable fields — to the client context. The hook returns `false` when no context value is set (context default is an empty array).
 
 ---
 
@@ -377,7 +380,7 @@ Note: i18n key file (`en.json`) was not created — keys are used inline via `us
 - [x] All UI strings use i18n keys (with fallback strings)
 - [ ] `.ics` imports correctly into Google Calendar, Apple Calendar, Outlook — pending manual E2E verification
 - [ ] Toast shown after .ics download — not implemented (dialog closes, toast omitted)
-- [ ] Integration tests (Playwright) — not yet written
+- [x] Integration tests (Playwright) — TC-CRM-021, TC-CRM-022, TC-CRM-023
 
 ---
 
@@ -400,6 +403,12 @@ Note: i18n key file (`en.json`) was not created — keys are used inline via `us
 | MODIFY | `packages/core/src/modules/customers/backend/customers/deals/[id]/page.tsx` — button + dialog |
 | MODIFY | `packages/core/src/modules/customers/backend/customers/people/[id]/page.tsx` — button + dialog |
 | MODIFY | `apps/mercato/src/modules.ts` — registered `calendar-export` |
+| CREATE | `packages/shared/src/lib/frontend/ModulesContext.tsx` — client-safe React Context (`ModulesProvider` + `useModules`) |
+| MODIFY | `apps/mercato/src/app/(backend)/backend/layout.tsx` — wrapped backend layout in `<ModulesProvider modules={modules.map(m => ({ id: m.id }))}>`  |
+| MODIFY | `packages/core/src/modules/calendar-export/frontend/hooks/useModuleEnabled.ts` — now imports `useModules` from `@open-mercato/shared/lib/frontend/ModulesContext` instead of `getModules()` |
+| CREATE | `packages/core/src/modules/calendar-export/__integration__/TC-CRM-021.spec.ts` — UI test: Add to Calendar button on Deal page (admin) |
+| CREATE | `packages/core/src/modules/calendar-export/__integration__/TC-CRM-022.spec.ts` — UI test: Add to Calendar button on Person page (employee) |
+| CREATE | `packages/core/src/modules/calendar-export/__integration__/TC-CRM-023.spec.ts` — API test: ICS endpoint validation |
 
 ---
 
@@ -417,3 +426,4 @@ Note: i18n key file (`en.json`) was not created — keys are used inline via `us
 | 2026-02-21 | contributor | Finalized: optional module, TZID format, full dialog with live preview, duration options (15/30/1h/2h/custom) |
 | 2026-02-21 | contributor | Locked: no VTIMEZONE block; date formatting via native `Intl.DateTimeFormat` + `formatIcsDate` helper, zero external deps |
 | 2026-02-21 | contributor | Updated after implementation: status → Implemented, corrected file paths (src/lib/calendar/, src/modules/calendar-export/api/ics/route.ts), documented worktree symlink decisions, updated acceptance criteria checklist, noted toast/i18n-file gaps |
+| 2026-02-22 | contributor | Added `ModulesContext` in `packages/shared` (Decision #12–14): fixed button not visible on client — `useModuleEnabled` now reads from React Context populated by `ModulesProvider` in backend layout; added integration tests TC-CRM-021, TC-CRM-022, TC-CRM-023 |
