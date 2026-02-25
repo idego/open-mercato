@@ -74,8 +74,9 @@ export function PersonHighlights({
   onCompanySave,
   extraHeaderActions,
 }: PersonHighlightsProps) {
-  const t = useT()
   const router = useRouter()
+  const t = useT()
+  const runMutation = React.useCallback(async (operation: () => Promise<void>) => operation(), [])
   const [editingCompany, setEditingCompany] = React.useState(false)
   const [companyDraftId, setCompanyDraftId] = React.useState<string>('')
   const [company, setCompany] = React.useState<CompanyInfo | null>(null)
@@ -91,7 +92,7 @@ export function PersonHighlights({
   const navigateToCompany = React.useCallback(() => {
     if (!companyHref) return
     router.push(companyHref)
-  }, [companyHref, router])
+  }, [companyHref])
 
   const handleCompanyClick = React.useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
@@ -174,7 +175,9 @@ export function PersonHighlights({
     setCompanyError(null)
     const nextId = companyDraftId.trim()
     try {
-      await onCompanySave(nextId.length ? nextId : null)
+      await runMutation(async () => {
+        await onCompanySave(nextId.length ? nextId : null)
+      })
       await loadCompany(nextId.length ? nextId : null)
       setEditingCompany(false)
     } catch (err) {
@@ -186,14 +189,16 @@ export function PersonHighlights({
     } finally {
       setCompanySaving(false)
     }
-  }, [companyDraftId, companySaving, loadCompany, onCompanySave, t])
+  }, [companyDraftId, companySaving, loadCompany, onCompanySave, runMutation, t])
 
   const handleCompanyClear = React.useCallback(async () => {
     if (companySaving) return
     setCompanySaving(true)
     setCompanyError(null)
     try {
-      await onCompanySave(null)
+      await runMutation(async () => {
+        await onCompanySave(null)
+      })
       await loadCompany(null)
       setCompanyDraftId('')
       setEditingCompany(false)
@@ -206,7 +211,7 @@ export function PersonHighlights({
     } finally {
       setCompanySaving(false)
     }
-  }, [companySaving, loadCompany, onCompanySave, t])
+  }, [companySaving, loadCompany, onCompanySave, runMutation, t])
 
   const companyPanel = (
     <div
@@ -364,7 +369,9 @@ export function PersonHighlights({
             containerClassName="max-w-full"
           />
         }
-        onDelete={onDelete}
+        onDelete={() => {
+          onDelete()
+        }}
         isDeleting={isDeleting}
         deleteLabel={t('customers.people.list.actions.delete')}
       />
