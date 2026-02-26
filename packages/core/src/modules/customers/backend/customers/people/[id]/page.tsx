@@ -48,6 +48,8 @@ import { readMarkdownPreferenceCookie, writeMarkdownPreferenceCookie } from '../
 import { InjectionSpot, useInjectionWidgets } from '@open-mercato/ui/backend/injection/InjectionSpot'
 import { DetailTabsLayout } from '../../../../components/detail/DetailTabsLayout'
 import { useGuardedMutation } from '@open-mercato/ui/backend/injection/useGuardedMutation'
+import { AddToCalendarDialog } from '../../../../../calendar-export/frontend/components/AddToCalendarDialog'
+import { useModuleEnabled } from '../../../../../calendar-export/frontend/hooks/useModuleEnabled'
 
 type PersonOverview = {
   person: {
@@ -118,6 +120,8 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
   const [activeTab, setActiveTab] = React.useState<SectionKey>(initialTab)
   const [sectionAction, setSectionAction] = React.useState<SectionAction | null>(null)
   const [isDeleting, setIsDeleting] = React.useState(false)
+  const [calendarOpen, setCalendarOpen] = React.useState(false)
+  const calendarExportEnabled = useModuleEnabled('calendar-export')
 
   const handleSectionActionChange = React.useCallback((action: SectionAction | null) => {
     setSectionAction(action)
@@ -722,6 +726,16 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
                 })
               )
             }}
+            extraHeaderActions={calendarExportEnabled ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setCalendarOpen(true)}
+              >
+                {t('calendar_export.button', 'Add to Calendar')}
+              </Button>
+            ) : undefined}
             onDelete={handleDelete}
             isDeleting={isDeleting}
             onCompanySave={async (next) => {
@@ -881,6 +895,19 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
 
         </PageBody>
         {ConfirmDialogElement}
+        {calendarExportEnabled && (
+          <AddToCalendarDialog
+            open={calendarOpen}
+            onClose={() => setCalendarOpen(false)}
+            entity="person"
+            entityId={data.person.id}
+            entityName={data.person.displayName}
+            entityMeta={data.person.primaryEmail
+              ? { [t('customers.people.detail.fields.email', 'Email')]: data.person.primaryEmail }
+              : undefined
+            }
+          />
+        )}
       </Page>
     )
   }

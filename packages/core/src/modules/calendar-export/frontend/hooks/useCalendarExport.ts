@@ -2,6 +2,9 @@
 
 import { useState, useCallback } from 'react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { buildGoogleCalendarUrl } from '@open-mercato/shared/lib/calendar/googleCalendarUrl'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 export type CalendarEntity = 'deal' | 'person'
 
@@ -10,29 +13,6 @@ interface UseCalendarExportParams {
   entityId: string
   entityName: string
   entityMeta?: Record<string, string>
-}
-
-function buildGoogleCalendarUrl(params: {
-  title: string
-  start: Date
-  durationMinutes: number
-  description: string
-  timezone: string
-}): string {
-  const { title, start, durationMinutes, description, timezone } = params
-  const end = new Date(start.getTime() + durationMinutes * 60_000)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const compact = (d: Date) =>
-    `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
-    `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`
-  const query = new URLSearchParams({
-    action: 'TEMPLATE',
-    text: title,
-    dates: `${compact(start)}/${compact(end)}`,
-    ctz: timezone,
-    details: description,
-  })
-  return `https://calendar.google.com/calendar/render?${query.toString()}`
 }
 
 function getTomorrow(): Date {
@@ -96,6 +76,7 @@ export function useCalendarExport({
   entityName,
   entityMeta,
 }: UseCalendarExportParams): UseCalendarExportResult {
+  const t = useT()
   const [date, setDate] = useState<Date>(getTomorrow)
   const [time, setTime] = useState('09:00')
   const [duration, setDuration] = useState(30)
@@ -148,6 +129,7 @@ export function useCalendarExport({
       anchor.click()
       document.body.removeChild(anchor)
       URL.revokeObjectURL(url)
+      flash(t('calendar_export.toast_success', 'Follow-up saved to your calendar'), 'success')
     } finally {
       setIsDownloading(false)
     }

@@ -29,10 +29,10 @@ Sales and account management workflows revolve around follow-ups. Users currentl
 | 5 | Timezone sourced from browser (`Intl.DateTimeFormat().resolvedOptions().timeZone`) | No user setup required; correct for the device they're working on |
 | 6 | No `VTIMEZONE` block in `.ics` output | All target clients (Google Cal, Outlook 2016+, Apple Cal macOS 10.12+) resolve IANA timezone names in `TZID` directly; adding `VTIMEZONE` would add complexity with no practical benefit for supported clients |
 | 7 | Date formatting via native `Date` + `Intl.DateTimeFormat` with `timeZone` option — no external library | Zero dependencies; fully sufficient for RFC 5545 timestamp formatting; requires explicit zero-padding (e.g. `String(n).padStart(2, '0')`) which is handled in a shared `formatIcsDate` helper |
-| 8 | `buildGoogleCalendarUrl` inlined in `useCalendarExport` rather than imported from shared | Worktree symlink constraint: `node_modules/@open-mercato/shared` resolves to main repo `dist/`, not worktree `src/`; inlining avoids TS2307 without build step |
+| 8 | `buildGoogleCalendarUrl` imported from `@open-mercato/shared/lib/calendar/googleCalendarUrl` | Worktree symlink constraint resolved; shared import is now used to avoid code duplication |
 | 9 | Relative imports between `calendar-export` and `customers` pages | Same symlink constraint — `@open-mercato/core/modules/...` cannot resolve new files in worktree; relative imports are stable |
 | 10 | No `CalendarExportService` wrapper; direct DB access in route handler | The route does a single read-only query per request; a service layer would be premature abstraction for this use case |
-| 11 | `useModuleEnabled` hook created in `calendar-export/frontend/hooks/` | Hook wasn't in codebase yet; placed in the module that uses it to avoid touching shared package |
+| 11 | `useModuleEnabled` hook created in `@open-mercato/shared/lib/frontend/useModuleEnabled.ts` | Generic infrastructure hook; calendar-export module re-exports it for backwards compatibility |
 | 12 | `ModulesContext` placed in `packages/shared/src/lib/frontend/` (not in `calendar-export`) | Importing from `@open-mercato/core` in `apps/mercato/backend/layout.tsx` caused a circular dependency; `@open-mercato/shared` already has wildcard exports, so the new file is auto-exported with no `package.json` changes |
 | 13 | Pass `modules.map(m => ({ id: m.id }))` to `ModulesProvider` instead of full module objects | Full module objects contain a `loader` function which Next.js cannot serialize when crossing the Server→Client boundary, producing "Functions cannot be passed directly to Client Components" |
 | 14 | All source edits must be made in main repo `src/` (not worktree `src/`) | Turbopack resolves packages via `node_modules` symlinks pointing to the main repo, not the worktree; changes to worktree `src/` files are invisible to Turbopack in dev mode |
@@ -379,7 +379,7 @@ Note: i18n key file (`en.json`) was not created — keys are used inline via `us
 - [x] No new external npm packages introduced
 - [x] All UI strings use i18n keys (with fallback strings)
 - [ ] `.ics` imports correctly into Google Calendar, Apple Calendar, Outlook — pending manual E2E verification
-- [ ] Toast shown after .ics download — not implemented (dialog closes, toast omitted)
+- [x] Toast shown after .ics download — implemented via `flash()` in `useCalendarExport.handleDownloadIcs`
 - [x] Integration tests (Playwright) — TC-CRM-021, TC-CRM-022, TC-CRM-023
 
 ---
@@ -427,3 +427,4 @@ Note: i18n key file (`en.json`) was not created — keys are used inline via `us
 | 2026-02-21 | contributor | Locked: no VTIMEZONE block; date formatting via native `Intl.DateTimeFormat` + `formatIcsDate` helper, zero external deps |
 | 2026-02-21 | contributor | Updated after implementation: status → Implemented, corrected file paths (src/lib/calendar/, src/modules/calendar-export/api/ics/route.ts), documented worktree symlink decisions, updated acceptance criteria checklist, noted toast/i18n-file gaps |
 | 2026-02-22 | contributor | Added `ModulesContext` in `packages/shared` (Decision #12–14): fixed button not visible on client — `useModuleEnabled` now reads from React Context populated by `ModulesProvider` in backend layout; added integration tests TC-CRM-021, TC-CRM-022, TC-CRM-023 |
+| 2026-02-25 | contributor | Code review fixes: RFC 5545 escaping + line folding in `generateIcs`; timezone-safe DTSTART/DTEND via `buildLocalIcsTimes` (no server-TZ drift); added `organizationId` filter to DB queries; `metadata` auth guard export in route; removed duplicate `buildGoogleCalendarUrl`; moved `useModuleEnabled` to shared; `Cmd+Enter` in dialog; toast after download; i18n entityMeta keys; people page calendar integration completed |

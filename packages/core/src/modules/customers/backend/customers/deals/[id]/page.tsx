@@ -660,10 +660,12 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
           entity="deal"
           entityId={data.deal.id}
           entityName={data.deal.title}
-          entityMeta={{
-            Stage: pipelineLabel ?? '',
-            Value: valueLabel,
-          }}
+          entityMeta={Object.fromEntries(
+            [
+              [t('customers.deals.detail.fields.pipeline', 'Stage'), pipelineLabel],
+              [t('customers.deals.detail.fields.value', 'Value'), valueLabel || null],
+            ].filter(([, v]) => v) as [string, string][],
+          )}
         />
       )}
     </Page>

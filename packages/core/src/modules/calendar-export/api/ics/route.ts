@@ -16,6 +16,10 @@ const querySchema = z.object({
   timezone: z.string().min(1).max(100),
 })
 
+export const metadata = {
+  auth: { requireAuth: true },
+}
+
 function notFound() {
   return new Response(JSON.stringify({ error: 'Not found' }), {
     status: 404,
@@ -28,6 +32,38 @@ function unauthorized() {
     status: 401,
     headers: { 'Content-Type': 'application/json' },
   })
+}
+
+/** Adds days to a YYYY-MM-DD string using UTC arithmetic to avoid server-timezone drift. */
+function addDaysToDateStr(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * Computes ICS DTSTART/DTEND strings directly from user-provided local date, time, and duration.
+ * Avoids constructing a Date in server-local timezone which would produce wrong DTSTART
+ * when the server timezone differs from the user's timezone.
+ */
+function buildLocalIcsTimes(
+  date: string,
+  time: string,
+  durationMinutes: number,
+): { dtstart: string; dtend: string } {
+  const dtstart = `${date.replace(/-/g, '')}T${time.replace(':', '')}00`
+
+  const [startH, startM] = time.split(':').map(Number)
+  const endTotalMinutes = startH * 60 + startM + durationMinutes
+  const endH = Math.floor(endTotalMinutes / 60) % 24
+  const endM = endTotalMinutes % 60
+  const dayOverflow = Math.floor(endTotalMinutes / (24 * 60))
+  const endDate = dayOverflow > 0 ? addDaysToDateStr(date, dayOverflow) : date
+  const dtend =
+    `${endDate.replace(/-/g, '')}T` +
+    `${String(endH).padStart(2, '0')}${String(endM).padStart(2, '0')}00`
+
+  return { dtstart, dtend }
 }
 
 export async function GET(request: Request) {
@@ -68,12 +104,16 @@ export async function GET(request: Request) {
     const deal = await findOneWithDecryption(
       em,
       CustomerDeal,
-      { id, tenantId: auth.tenantId ?? undefined, deletedAt: null },
+      {
+        id,
+        tenantId: auth.tenantId ?? undefined,
+        organizationId: auth.orgId ?? undefined,
+        deletedAt: null,
+      },
       {},
       decryptionScope,
     )
     if (!deal) return notFound()
-    if (auth.tenantId && deal.tenantId !== auth.tenantId) return notFound()
 
     title = `Follow-up: ${deal.title}`
     const parts: string[] = [`Deal: ${deal.title}`]
@@ -84,12 +124,17 @@ export async function GET(request: Request) {
     const person = await findOneWithDecryption(
       em,
       CustomerEntity,
-      { id, kind: 'person', tenantId: auth.tenantId ?? undefined, deletedAt: null },
+      {
+        id,
+        kind: 'person',
+        tenantId: auth.tenantId ?? undefined,
+        organizationId: auth.orgId ?? undefined,
+        deletedAt: null,
+      },
       {},
       decryptionScope,
     )
     if (!person) return notFound()
-    if (auth.tenantId && person.tenantId !== auth.tenantId) return notFound()
 
     title = `Follow-up: ${person.displayName}`
     const parts: string[] = [`Person: ${person.displayName}`]
@@ -97,18 +142,18 @@ export async function GET(request: Request) {
     description = parts.join('\n')
   }
 
-  const [hours, minutes] = time.split(':').map(Number)
-  const start = new Date(`${date}T00:00:00`)
-  start.setHours(hours, minutes, 0, 0)
+  const { dtstart, dtend } = buildLocalIcsTimes(date, time, duration)
 
   const ics = generateIcsContent({
     uid: `${entity}-${id}-${Date.now()}`,
     title,
-    start,
+    start: new Date(),
     durationMinutes: duration,
     description,
     url: '',
     timezone,
+    dtstart,
+    dtend,
   })
 
   return new Response(ics, {
@@ -121,22 +166,18 @@ export async function GET(request: Request) {
 }
 
 export const openApi: OpenApiRouteDoc = {
-  GET: {
-    tags: ['Calendar Export'],
-    summary: 'Generate ICS file for a deal or person follow-up',
-    parameters: [
-      { name: 'entity', in: 'query', required: true, schema: { type: 'string', enum: ['deal', 'person'] } },
-      { name: 'id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
-      { name: 'date', in: 'query', required: true, schema: { type: 'string', example: '2026-02-22' } },
-      { name: 'time', in: 'query', required: true, schema: { type: 'string', example: '09:00' } },
-      { name: 'duration', in: 'query', required: true, schema: { type: 'integer', minimum: 5, maximum: 480 } },
-      { name: 'timezone', in: 'query', required: true, schema: { type: 'string', example: 'Europe/Warsaw' } },
-    ],
-    responses: {
-      200: { description: 'ICS file' },
-      400: { description: 'Invalid parameters' },
-      401: { description: 'Authentication required' },
-      404: { description: 'Entity not found' },
+  tag: 'Calendar Export',
+  summary: 'Generate ICS file for a deal or person follow-up',
+  methods: {
+    GET: {
+      summary: 'Download follow-up .ics file',
+      query: querySchema,
+      responses: [
+        { status: 200, description: 'ICS calendar file' },
+        { status: 400, description: 'Invalid parameters' },
+        { status: 401, description: 'Authentication required' },
+        { status: 404, description: 'Entity not found' },
+      ],
     },
   },
 }

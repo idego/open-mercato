@@ -95,4 +95,47 @@ describe('generateIcsContent', () => {
     expect(result).toContain('BEGIN:VEVENT')
     expect(result).toContain('END:VEVENT')
   })
+
+  it('uses dtstart/dtend overrides when provided, ignoring Date conversion', () => {
+    const result = generateIcsContent({
+      ...baseParams,
+      dtstart: '20260222T090000',
+      dtend: '20260222T093000',
+    })
+    expect(result).toContain('DTSTART;TZID=Europe/Warsaw:20260222T090000')
+    expect(result).toContain('DTEND;TZID=Europe/Warsaw:20260222T093000')
+  })
+
+  it('escapes backslash in title', () => {
+    const result = generateIcsContent({ ...baseParams, title: 'Deal\\Name' })
+    expect(result).toContain('SUMMARY:Deal\\\\Name')
+  })
+
+  it('escapes comma in title', () => {
+    const result = generateIcsContent({ ...baseParams, title: 'Smith, John' })
+    expect(result).toContain('SUMMARY:Smith\\, John')
+  })
+
+  it('escapes semicolon in title', () => {
+    const result = generateIcsContent({ ...baseParams, title: 'A;B' })
+    expect(result).toContain('SUMMARY:A\\;B')
+  })
+
+  it('escapes CRLF in title to prevent ICS injection', () => {
+    const result = generateIcsContent({
+      ...baseParams,
+      title: 'foo\r\nBEGIN:VEVENT\r\nUID:injected',
+    })
+    expect(result).not.toContain('BEGIN:VEVENT\r\nUID:injected')
+    expect(result).toContain('SUMMARY:foo\\nBEGIN:VEVENT\\nUID:injected')
+  })
+
+  it('folds lines longer than 75 characters', () => {
+    const longTitle = 'A'.repeat(80)
+    const result = generateIcsContent({ ...baseParams, title: longTitle })
+    const summaryLine = result.split('\r\n').find((l) => l.startsWith('SUMMARY:'))
+    expect(summaryLine).toBeDefined()
+    expect((summaryLine ?? '').length).toBeLessThanOrEqual(75)
+    expect(result).toContain('\r\n ')
+  })
 })

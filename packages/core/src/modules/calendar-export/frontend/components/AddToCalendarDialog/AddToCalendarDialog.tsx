@@ -62,7 +62,6 @@ export function AddToCalendarDialog({
   const isCustom = customDuration !== null
   const deeplink = buildDeeplink(entity, entityId)
 
-  // buildPreview() is pure — called directly in render, no useEffect needed
   const previewText = buildPreview()
   const previewLines = previewText.split('\n')
 
@@ -96,6 +95,10 @@ export function AddToCalendarDialog({
           if (e.key === 'Escape') {
             e.preventDefault()
             onClose()
+          }
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault()
+            void handleDownload()
           }
         }}
       >
