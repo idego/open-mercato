@@ -37,6 +37,7 @@ import { profileSections, profilePathPrefixes } from '@open-mercato/core/modules
 import { APP_VERSION } from '@open-mercato/shared/lib/version'
 import { PageInjectionBoundary } from '@open-mercato/ui/backend/injection/PageInjectionBoundary'
 import { AiAssistantIntegration, AiChatHeaderButton } from '@open-mercato/ai-assistant/frontend'
+import { ModulesProvider } from '@open-mercato/shared/lib/frontend/ModulesContext'
 import { CustomEntity } from '@open-mercato/core/modules/entities/data/entities'
 import { ComponentOverridesBootstrap } from '@/components/ComponentOverridesBootstrap'
 
@@ -383,6 +384,7 @@ export default async function BackendLayout({ children, params }: { children: Re
   return (
     <>
       <Script async src="https://w.appzi.io/w.js?token=TtIV6" strategy="afterInteractive" />
+      <ModulesProvider modules={modules.map((m) => ({ id: m.id }))}>
       <I18nProvider locale={locale} dict={dict}>
         <ComponentOverridesBootstrap>
           <AiAssistantIntegration
@@ -415,6 +417,7 @@ export default async function BackendLayout({ children, params }: { children: Re
           </AiAssistantIntegration>
         </ComponentOverridesBootstrap>
       </I18nProvider>
+      </ModulesProvider>
     </>
   )
 }

@@ -40,7 +40,8 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'scheduler', from: '@open-mercato/scheduler' },
   { id: 'inbox_ops', from: '@open-mercato/core' },
   { id: 'example', from: '@app' },
-  
+  { id: 'calendar-export', from: '@open-mercato/core' },
+
 ]
 
 if (parseBooleanWithDefault(process.env.OM_ENABLE_ENTERPRISE_MODULES, false)) {

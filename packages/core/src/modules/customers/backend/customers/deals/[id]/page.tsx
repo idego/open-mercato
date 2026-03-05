@@ -25,6 +25,8 @@ import { renderDictionaryColor, renderDictionaryIcon } from '@open-mercato/core/
 import { ICON_SUGGESTIONS } from '../../../../lib/dictionaries'
 import { createCustomerNotesAdapter } from '../../../../components/detail/notesAdapter'
 import { readMarkdownPreferenceCookie, writeMarkdownPreferenceCookie } from '../../../../lib/markdownPreference'
+import { AddToCalendarDialog } from '../../../../../calendar-export/components/AddToCalendarDialog'
+import { useModuleEnabled } from '../../../../../calendar-export/hooks/useModuleEnabled'
 
 type DealAssociation = {
   id: string
@@ -115,6 +117,8 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
   const [reloadToken, setReloadToken] = React.useState(0)
   const [activeTab, setActiveTab] = React.useState<'notes' | 'activities'>('notes')
   const [sectionAction, setSectionAction] = React.useState<SectionAction | null>(null)
+  const [calendarOpen, setCalendarOpen] = React.useState(false)
+  const calendarExportEnabled = useModuleEnabled('calendar-export')
   const handleNotesLoadingChange = React.useCallback(() => {}, [])
   const handleActivitiesLoadingChange = React.useCallback(() => {}, [])
   const focusDealField = React.useCallback(
@@ -409,6 +413,16 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
             backLabel={t('customers.deals.detail.backToList', 'Back to deals')}
             utilityActions={(
               <>
+                {calendarExportEnabled && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCalendarOpen(true)}
+                  >
+                    {t('calendar_export.button', 'Add to Calendar')}
+                  </Button>
+                )}
                 <SendObjectMessageDialog
                   object={{
                     entityModule: 'customers',
@@ -686,6 +700,21 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
         </div>
       </PageBody>
       {ConfirmDialogElement}
+      {calendarExportEnabled && (
+        <AddToCalendarDialog
+          open={calendarOpen}
+          onClose={() => setCalendarOpen(false)}
+          entity="deal"
+          entityId={data.deal.id}
+          entityName={data.deal.title}
+          entityMeta={Object.fromEntries(
+            [
+              [t('customers.deals.detail.fields.pipeline', 'Stage'), pipelineLabel],
+              [t('customers.deals.detail.fields.value', 'Value'), valueLabel || null],
+            ].filter(([, v]) => v) as [string, string][],
+          )}
+        />
+      )}
     </Page>
   )
 }

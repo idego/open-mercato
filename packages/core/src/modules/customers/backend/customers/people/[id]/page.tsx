@@ -48,6 +48,8 @@ import { readMarkdownPreferenceCookie, writeMarkdownPreferenceCookie } from '../
 import { InjectionSpot, useInjectionWidgets } from '@open-mercato/ui/backend/injection/InjectionSpot'
 import { DetailTabsLayout } from '../../../../components/detail/DetailTabsLayout'
 import { useGuardedMutation } from '@open-mercato/ui/backend/injection/useGuardedMutation'
+import { AddToCalendarDialog } from '../../../../../calendar-export/components/AddToCalendarDialog'
+import { useModuleEnabled } from '../../../../../calendar-export/hooks/useModuleEnabled'
 import { SendObjectMessageDialog } from '@open-mercato/ui/backend/messages'
 
 type PersonOverview = {
@@ -119,6 +121,8 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
   const [activeTab, setActiveTab] = React.useState<SectionKey>(initialTab)
   const [sectionAction, setSectionAction] = React.useState<SectionAction | null>(null)
   const [isDeleting, setIsDeleting] = React.useState(false)
+  const [calendarOpen, setCalendarOpen] = React.useState(false)
+  const calendarExportEnabled = useModuleEnabled('calendar-export')
 
   const handleSectionActionChange = React.useCallback((action: SectionAction | null) => {
     setSectionAction(action)
@@ -453,7 +457,7 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
         const nextCustomFields = { ...prefixed }
         return { ...prev, customFields: nextCustomFields }
       })
-        flash(t('ui.forms.flash.saveSuccess'), 'success')
+      flash(t('ui.forms.flash.saveSuccess'), 'success')
       },
       [data, runMutationWithContext, t]
     )
@@ -658,22 +662,34 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
               displayName: validators.displayName,
             }}
             utilityActions={(
-              <SendObjectMessageDialog
-                object={{
-                  entityModule: 'customers',
-                  entityType: 'person',
-                  entityId: personId,
-                  previewData: {
-                    title: person.displayName,
-                    subtitle: person.primaryEmail ?? undefined,
-                    metadata: {
-                      [t('customers.people.detail.highlights.primaryPhone')]: person.primaryPhone ?? '-',
-                      [t('customers.people.detail.fields.jobTitle')]: profile?.jobTitle ?? '-',
+              <>
+                {calendarExportEnabled && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCalendarOpen(true)}
+                  >
+                    {t('calendar_export.button', 'Add to Calendar')}
+                  </Button>
+                )}
+                <SendObjectMessageDialog
+                  object={{
+                    entityModule: 'customers',
+                    entityType: 'person',
+                    entityId: personId,
+                    previewData: {
+                      title: person.displayName,
+                      subtitle: person.primaryEmail ?? undefined,
+                      metadata: {
+                        [t('customers.people.detail.highlights.primaryPhone')]: person.primaryPhone ?? '-',
+                        [t('customers.people.detail.fields.jobTitle')]: profile?.jobTitle ?? '-',
+                      },
                     },
-                  },
-                }}
-                viewHref={`/backend/customers/people/${personId}`}
-              />
+                  }}
+                  viewHref={`/backend/customers/people/${personId}`}
+                />
+              </>
             )}
             onDisplayNameSave={updateDisplayName}
             onPrimaryEmailSave={async (next) => {
@@ -900,6 +916,19 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
 
         </PageBody>
         {ConfirmDialogElement}
+        {calendarExportEnabled && (
+          <AddToCalendarDialog
+            open={calendarOpen}
+            onClose={() => setCalendarOpen(false)}
+            entity="person"
+            entityId={data.person.id}
+            entityName={data.person.displayName}
+            entityMeta={data.person.primaryEmail
+              ? { [t('customers.people.detail.fields.email', 'Email')]: data.person.primaryEmail }
+              : undefined
+            }
+          />
+        )}
       </Page>
     )
   }
