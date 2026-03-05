@@ -3,6 +3,10 @@ permissions:
   contents: read
 
 on:
+  push:
+    branches:
+      - main
+      - develop
   pull_request:
     branches:
       - main
@@ -39,7 +43,7 @@ jobs:
         run: yarn build:packages
 
       - name: Check i18n sync
-        run: yarn i18n:check-sync
+        run: yarn tsx scripts/i18n-check-sync.ts
 
       - name: Check i18n usage
         run: yarn i18n:check-usage

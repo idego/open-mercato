@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ArrowRightLeft, Building2, CreditCard, Mail, Pencil, Plus, Send, Store, Truck, UserRound, Wand2, X } from 'lucide-react'
 import { FormHeader, type ActionItem } from '@open-mercato/ui/backend/forms'
 import { VersionHistoryAction } from '@open-mercato/ui/backend/version-history'
+import { SendObjectMessageDialog } from '@open-mercato/ui/backend/messages'
 import Link from 'next/link'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall, apiCallOrThrow, readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
@@ -61,6 +62,16 @@ import { ICON_SUGGESTIONS } from '@open-mercato/core/modules/customers/lib/dicti
 import { readMarkdownPreferenceCookie, writeMarkdownPreferenceCookie } from '@open-mercato/core/modules/customers/lib/markdownPreference'
 import { InjectionSpot, useInjectionWidgets } from '@open-mercato/ui/backend/injection/InjectionSpot'
 import { useGuardedMutation } from '@open-mercato/ui/backend/injection/useGuardedMutation'
+
+function formatMessageAmount(amount: number | null | undefined, currency: string | null | undefined): string | null {
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) return null
+  if (!currency) return amount.toLocaleString()
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount)
+  } catch {
+    return `${amount.toLocaleString()} ${currency}`
+  }
+}
 
 function CurrencyInlineEditor({
   label,
@@ -1843,9 +1854,11 @@ function StatusInlineEditor({
 export default function SalesDocumentDetailPage({
   params,
   initialKind,
+  includeAmountInMessageMetadata,
 }: {
   params: { id: string }
   initialKind?: 'order' | 'quote'
+  includeAmountInMessageMetadata?: boolean
 }) {
   const t = useT()
   const router = useRouter()
@@ -2728,6 +2741,11 @@ export default function SalesDocumentDetailPage({
       : null
   const contactEmail = resolveCustomerEmail(customerSnapshot) ?? metadataEmail ?? record?.contactEmail ?? null
   const statusDisplay = record?.status ? statusDictionaryMap[record.status] ?? null : null
+  const previewAmount = formatMessageAmount(record?.grandTotalGrossAmount ?? null, record?.currencyCode ?? null)
+  const messagePreviewMetadata: Record<string, string> = {}
+  if (includeAmountInMessageMetadata && previewAmount) {
+    messagePreviewMetadata[t('sales.documents.detail.totals.grandTotalGross')] = previewAmount
+  }
   const contactRecordId = customerSnapshot?.contact?.id ?? customerSnapshot?.customer?.id ?? record?.customerEntityId ?? null
   const resolveAdjustmentLabel = React.useCallback(
     (row: AdjustmentRowData) => {
@@ -4425,13 +4443,34 @@ export default function SalesDocumentDetailPage({
           backHref={kind === 'order' ? '/backend/sales/orders' : '/backend/sales/quotes'}
           backLabel={t('sales.documents.detail.back', 'Back to documents')}
           utilityActions={record ? (
-            <VersionHistoryAction
-              config={{
-                resourceKind: kind === 'order' ? 'sales.order' : 'sales.quote',
-                resourceId: record.id,
-              }}
-              t={t}
-            />
+            <>
+              <SendObjectMessageDialog
+                object={{
+                  entityModule: 'sales',
+                  entityType: kind,
+                  entityId: record.id,
+                  sourceEntityType: kind === 'order' ? 'sales.order' : 'sales.quote',
+                  sourceEntityId: record.id,
+                  previewData: {
+                    title: number,
+                    status: statusDisplay?.label ?? record?.status ?? undefined,
+                    metadata: Object.keys(messagePreviewMetadata).length > 0 ? messagePreviewMetadata : undefined,
+                  },
+                }}
+                viewHref={`/backend/sales/${kind === 'order' ? 'orders' : 'quotes'}/${record.id}`}
+                defaultValues={{
+                  sourceEntityType: kind === 'order' ? 'sales.order' : 'sales.quote',
+                  sourceEntityId: record.id,
+                }}
+              />
+              <VersionHistoryAction
+                config={{
+                  resourceKind: kind === 'order' ? 'sales.order' : 'sales.quote',
+                  resourceId: record.id,
+                }}
+                t={t}
+              />
+            </>
           ) : null}
           entityTypeLabel={kind === 'order'
             ? t('sales.documents.detail.order', 'Sales order')

@@ -8,6 +8,7 @@ import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { FormHeader } from '@open-mercato/ui/backend/forms'
 import { VersionHistoryAction } from '@open-mercato/ui/backend/version-history'
+import { SendObjectMessageDialog } from '@open-mercato/ui/backend/messages'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCallOrThrow, readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
@@ -24,8 +25,8 @@ import { renderDictionaryColor, renderDictionaryIcon } from '@open-mercato/core/
 import { ICON_SUGGESTIONS } from '../../../../lib/dictionaries'
 import { createCustomerNotesAdapter } from '../../../../components/detail/notesAdapter'
 import { readMarkdownPreferenceCookie, writeMarkdownPreferenceCookie } from '../../../../lib/markdownPreference'
-import { AddToCalendarDialog } from '../../../../../calendar-export/frontend/components/AddToCalendarDialog'
-import { useModuleEnabled } from '../../../../../calendar-export/frontend/hooks/useModuleEnabled'
+import { AddToCalendarDialog } from '../../../../../calendar-export/components/AddToCalendarDialog'
+import { useModuleEnabled } from '../../../../../calendar-export/hooks/useModuleEnabled'
 
 type DealAssociation = {
   id: string
@@ -41,6 +42,8 @@ type DealDetailPayload = {
     description: string | null
     status: string | null
     pipelineStage: string | null
+    pipelineId: string | null
+    pipelineStageId: string | null
     valueAmount: string | null
     valueCurrency: string | null
     probability: number | null
@@ -212,6 +215,8 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
           title: base.title,
           status: base.status ?? undefined,
           pipelineStage: base.pipelineStage ?? undefined,
+          pipelineId: base.pipelineId ?? undefined,
+          pipelineStageId: base.pipelineStageId ?? undefined,
           valueAmount: typeof base.valueAmount === 'number' ? base.valueAmount : undefined,
           valueCurrency: base.valueCurrency ?? undefined,
           probability: typeof base.probability === 'number' ? base.probability : undefined,
@@ -376,7 +381,16 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
   const statusLabel =
     resolveDictionaryLabel(data.deal.status, statusDictionaryMap) ??
     t('customers.deals.detail.noStatus', 'No status')
+  const statusDictEntry = data.deal.status ? statusDictionaryMap?.[data.deal.status] ?? null : null
   const pipelineLabel = resolveDictionaryLabel(data.deal.pipelineStage, pipelineDictionaryMap)
+  const pipelineDictEntry = data.deal.pipelineStage ? pipelineDictionaryMap?.[data.deal.pipelineStage] ?? null : null
+  const previewValueAmount = formatCurrency(data.deal.valueAmount, data.deal.valueCurrency)
+  const previewProbability = data.deal.probability !== null && data.deal.probability !== undefined
+    ? `${data.deal.probability}%`
+    : null
+  const dealPreviewMetadata: Record<string, string> = {}
+  if (previewValueAmount) dealPreviewMetadata[t('customers.deals.detail.fields.value')] = previewValueAmount
+  if (previewProbability) dealPreviewMetadata[t('customers.deals.detail.fields.probability')] = previewProbability
 
   const peopleSummaryLabel =
     data.people.length === 1
@@ -409,6 +423,25 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
                     {t('calendar_export.button', 'Add to Calendar')}
                   </Button>
                 )}
+                <SendObjectMessageDialog
+                  object={{
+                    entityModule: 'customers',
+                    entityType: 'deal',
+                    entityId: data.deal.id,
+                    sourceEntityType: 'customers.deal',
+                    sourceEntityId: data.deal.id,
+                    previewData: {
+                      title: data.deal.title || t('customers.deals.detail.untitled', 'Untitled deal'),
+                      status: data.deal.status ? statusLabel : undefined,
+                      metadata: Object.keys(dealPreviewMetadata).length > 0 ? dealPreviewMetadata : undefined,
+                    },
+                  }}
+                  viewHref={`/backend/customers/deals/${data.deal.id}`}
+                  defaultValues={{
+                    sourceEntityType: 'customers.deal',
+                    sourceEntityId: data.deal.id,
+                  }}
+                />
                 <VersionHistoryAction
                   config={{ resourceKind: 'customers.deal', resourceId: data.deal.id }}
                   t={t}
@@ -460,9 +493,21 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
                   </div>
                   <div>
                     <p className="text-xs font-medium uppercase text-muted-foreground">
+                      {t('customers.deals.detail.fields.status', 'Status')}
+                    </p>
+                    <p className="text-base text-foreground flex items-center gap-2">
+                      {statusDictEntry?.color ? renderDictionaryColor(statusDictEntry.color) : null}
+                      {statusDictEntry?.icon ? renderDictionaryIcon(statusDictEntry.icon) : null}
+                      {statusLabel}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium uppercase text-muted-foreground">
                       {t('customers.deals.detail.fields.pipeline', 'Pipeline stage')}
                     </p>
-                    <p className="text-base text-foreground">
+                    <p className="text-base text-foreground flex items-center gap-2">
+                      {pipelineDictEntry?.color ? renderDictionaryColor(pipelineDictEntry.color) : null}
+                      {pipelineDictEntry?.icon ? renderDictionaryIcon(pipelineDictEntry.icon) : null}
                       {pipelineLabel ?? t('customers.deals.detail.noValue', 'Not provided')}
                     </p>
                   </div>
@@ -627,6 +672,8 @@ export default function DealDetailPage({ params }: { params?: { id?: string } })
                     title: data.deal.title ?? '',
                     status: data.deal.status ?? '',
                     pipelineStage: data.deal.pipelineStage ?? '',
+                    pipelineId: data.deal.pipelineId ?? '',
+                    pipelineStageId: data.deal.pipelineStageId ?? '',
                     valueAmount: data.deal.valueAmount ? Number(data.deal.valueAmount) : null,
                     valueCurrency: data.deal.valueCurrency ?? undefined,
                     probability: data.deal.probability ?? null,

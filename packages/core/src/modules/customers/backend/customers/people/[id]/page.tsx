@@ -48,8 +48,9 @@ import { readMarkdownPreferenceCookie, writeMarkdownPreferenceCookie } from '../
 import { InjectionSpot, useInjectionWidgets } from '@open-mercato/ui/backend/injection/InjectionSpot'
 import { DetailTabsLayout } from '../../../../components/detail/DetailTabsLayout'
 import { useGuardedMutation } from '@open-mercato/ui/backend/injection/useGuardedMutation'
-import { AddToCalendarDialog } from '../../../../../calendar-export/frontend/components/AddToCalendarDialog'
-import { useModuleEnabled } from '../../../../../calendar-export/frontend/hooks/useModuleEnabled'
+import { AddToCalendarDialog } from '../../../../../calendar-export/components/AddToCalendarDialog'
+import { useModuleEnabled } from '../../../../../calendar-export/hooks/useModuleEnabled'
+import { SendObjectMessageDialog } from '@open-mercato/ui/backend/messages'
 
 type PersonOverview = {
   person: {
@@ -660,6 +661,36 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
               phone: validators.phone,
               displayName: validators.displayName,
             }}
+            utilityActions={(
+              <>
+                {calendarExportEnabled && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCalendarOpen(true)}
+                  >
+                    {t('calendar_export.button', 'Add to Calendar')}
+                  </Button>
+                )}
+                <SendObjectMessageDialog
+                  object={{
+                    entityModule: 'customers',
+                    entityType: 'person',
+                    entityId: personId,
+                    previewData: {
+                      title: person.displayName,
+                      subtitle: person.primaryEmail ?? undefined,
+                      metadata: {
+                        [t('customers.people.detail.highlights.primaryPhone')]: person.primaryPhone ?? '-',
+                        [t('customers.people.detail.fields.jobTitle')]: profile?.jobTitle ?? '-',
+                      },
+                    },
+                  }}
+                  viewHref={`/backend/customers/people/${personId}`}
+                />
+              </>
+            )}
             onDisplayNameSave={updateDisplayName}
             onPrimaryEmailSave={async (next) => {
               const send = typeof next === 'string' ? next : ''
@@ -726,16 +757,6 @@ export default function CustomerPersonDetailPage({ params }: { params?: { id?: s
                 })
               )
             }}
-            extraHeaderActions={calendarExportEnabled ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setCalendarOpen(true)}
-              >
-                {t('calendar_export.button', 'Add to Calendar')}
-              </Button>
-            ) : undefined}
             onDelete={handleDelete}
             isDeleting={isDeleting}
             onCompanySave={async (next) => {

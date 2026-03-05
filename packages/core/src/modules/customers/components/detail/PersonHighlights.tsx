@@ -55,7 +55,7 @@ export type PersonHighlightsProps = {
   onDelete: () => void
   isDeleting: boolean
   onCompanySave: (companyId: string | null) => Promise<void>
-  extraHeaderActions?: React.ReactNode
+  utilityActions?: React.ReactNode
 }
 
 type CompanyInfo = { id: string; name: string }
@@ -72,7 +72,7 @@ export function PersonHighlights({
   onDelete,
   isDeleting,
   onCompanySave,
-  extraHeaderActions,
+  utilityActions,
 }: PersonHighlightsProps) {
   const router = useRouter()
   const t = useT()
@@ -342,7 +342,7 @@ export function PersonHighlights({
         backLabel={t('customers.people.detail.actions.backToList')}
         utilityActions={(
           <>
-            {extraHeaderActions}
+            {utilityActions}
             <VersionHistoryAction
               config={{
                 resourceKind: 'customers.person',

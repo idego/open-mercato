@@ -45,6 +45,7 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+.env.preview
 !.env.example
 
 # vercel
@@ -100,6 +101,9 @@ packages/cache/node_modules/*
 newrelic_agent.log
 /generated/
 .queue
+
+# Dev Container auto-generated compose volumes
+.devcontainer/docker-compose.volumes.yml
 
 # OpenCode local config (generated at runtime, may contain secrets)
 docker/opencode/opencode.jsonc

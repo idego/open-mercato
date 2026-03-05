@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi/types'
+import type { SyncCrudEventResult } from '../lib/crud/sync-event-types'
 import type { DashboardWidgetModule } from './dashboard/widgets'
-import type { InjectionWidgetModule, ModuleInjectionTable } from './widgets/injection'
+import type { InjectionAnyWidgetModule, ModuleInjectionTable } from './widgets/injection'
 
 // Context passed to dynamic metadata guards
 export type RouteVisibilityContext = { path?: string; auth?: any }
@@ -130,7 +131,7 @@ export type ModuleInjectionWidgetEntry = {
   moduleId: string
   key: string
   source: 'app' | 'package'
-  loader: () => Promise<InjectionWidgetModule<any, any>>
+  loader: () => Promise<InjectionAnyWidgetModule<any, any>>
 }
 
 export type Module = {
@@ -148,8 +149,12 @@ export type Module = {
     id: string
     event: string
     persistent?: boolean
+    /** When true, subscriber runs synchronously inside the mutation pipeline */
+    sync?: boolean
+    /** Execution priority for sync subscribers (lower = earlier). Default: 50 */
+    priority?: number
     // Imported function reference; will be registered into event bus
-    handler: (payload: any, ctx: any) => Promise<void> | void
+    handler: (payload: any, ctx: any) => Promise<void | SyncCrudEventResult> | void | SyncCrudEventResult
   }>
   // Auto-discovered queue workers
   workers?: Array<{

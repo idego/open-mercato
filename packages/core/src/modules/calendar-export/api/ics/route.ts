@@ -17,7 +17,7 @@ const querySchema = z.object({
 })
 
 export const metadata = {
-  auth: { requireAuth: true },
+  auth: { requireAuth: true, requireFeatures: ['customers.view'] },
 }
 
 function notFound() {

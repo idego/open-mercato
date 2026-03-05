@@ -234,9 +234,11 @@ src/modules/<module>/
 ```
 
 - **Notification types**: Declare in `notifications.ts` exporting `notificationTypes: NotificationTypeDefinition[]`
+- **Reactive handlers**: Declare in `notifications.handlers.ts` exporting `notificationHandlers: NotificationHandler[]`
 - **Subscribers**: Create event subscribers in `subscribers/` to emit notifications on domain events
 - **Client renderers**: Declare in `notifications.client.ts`; store components in `widgets/notifications/`
 - **i18n**: Add translations to `i18n/<locale>.json` under `<module>.notifications.*` keys
+- **Handler behavior**: Keep handlers idempotent; use `ctx.emitEvent(...)` for cross-component updates and `ctx.toast(...)`/`ctx.popup(...)` for UX side-effects
 
 ## Widget Injection
 
@@ -247,6 +249,8 @@ Widget injection is the preferred way to build inter-module UI extensions. Avoid
 - Declare widgets under `widgets/injection/`
 - Map them to slots via `widgets/injection-table.ts`
 - Keep metadata in colocated `*.meta.ts` files
+- For headless widgets (menu items, field/column/action declarations), export declarative payloads from `widget.ts` without a React `Widget` component
+- Use `InjectionPosition` from `@open-mercato/shared/modules/widgets/injection-position` for deterministic before/after/first/last placement
 
 ### Spot IDs
 
@@ -254,8 +258,43 @@ Hosts expose consistent spot ids:
 - `crud-form:<entityId>` — forms
 - `data-table:<tableId>[:header|:footer]` — data tables
 - `admin.page:<path>:before|after` — admin pages
+- `menu:sidebar:main` — main sidebar items/groups
+- `menu:sidebar:settings` — settings sidebar
+
+DataTable deep-extension surfaces:
+- `data-table:<tableId>:columns`
+- `data-table:<tableId>:row-actions`
+- `data-table:<tableId>:bulk-actions`
+- `data-table:<tableId>:filters`
+
+CrudForm field-injection surface:
+- `crud-form:<entityId>:fields`
+
+## API Interceptors
+
+Define route interceptors in `api/interceptors.ts` and export `interceptors`.
+- Keep scope explicit with `targetRoute` + `methods`; use wildcards only when required.
+- `before`/`after` hooks must be fail-closed and timeout-safe.
+- If `before` rewrites body/query, return a schema-compatible payload (route handler re-validates it).
+- For CRUD list narrowing, prefer writing `query.ids` (comma-separated UUIDs). The CRUD factory merges/intersects `ids` with existing `id` filters.
+
+## Component Replacement
+
+Define component overrides in `widgets/components.ts` and export `componentOverrides`.
+- Prefer handle-based targets (`page:*`, `data-table:*`, `crud-form:*`, `section:*`) for deterministic replacement.
+- Use wrapper/props-transform modes when possible; replacement mode should preserve props compatibility.
+- `menu:sidebar:profile` — profile sidebar
+- `menu:topbar:profile-dropdown` — user/profile dropdown
+- `menu:topbar:actions` — header action area
 
 Widgets can opt into grouped cards or tabs via `placement.kind`.
+
+### Menu Injection
+
+- Define menu widgets with `menuItems: InjectionMenuItem[]` and map them to one or more `menu:*` spots in `widgets/injection-table.ts`.
+- Prefer stable `menuItems[].id` values (`<module>-<feature>-<action>`) because sidebar customization and tests rely on these IDs.
+- Always use i18n keys for labels (`labelKey`), never hard-code user-facing text in widget payloads.
+- When placing relative to an existing item, provide `placement: { position: InjectionPosition.Before|After, relativeTo: '<target-id>' }`.
 
 ## Custom Fields
 
@@ -407,6 +446,58 @@ Output to `apps/mercato/.mercato/generated/`. Never edit manually. Never import 
 | `modules.cli.generated.ts` | CLI module registrations |
 
 Run `npm run modules:prepare` or rely on `predev`/`prebuild`.
+
+## Response Enrichers
+
+Response enrichers let a module add computed fields to another module's CRUD API responses (similar to GraphQL Federation).
+
+### Creating an Enricher
+
+Create `data/enrichers.ts` in your module:
+
+```typescript
+import type { ResponseEnricher } from '@open-mercato/shared/lib/crud/response-enricher'
+
+const myEnricher: ResponseEnricher = {
+  id: 'mymodule.customer-metrics',
+  targetEntity: 'customers.person',     // entity to enrich
+  features: ['mymodule.view'],           // required ACL features
+  priority: 10,                          // higher runs first
+  timeout: 2000,                         // ms, default 2000
+  fallback: { _mymodule: { count: 0 } },// returned on failure
+  critical: false,                       // true = error propagates to client
+  async enrichOne(record, context) {
+    // Add fields to a single record
+    return { ...record, _mymodule: { count: 42 } }
+  },
+  async enrichMany(records, context) {
+    // Batch enrichment (prevents N+1)
+    return records.map(r => ({ ...r, _mymodule: { count: 42 } }))
+  },
+}
+
+export const enrichers: ResponseEnricher[] = [myEnricher]
+```
+
+### Opt-in on CRUD routes
+
+Target entity routes must opt in via `enrichers` option:
+```typescript
+const crud = makeCrudRoute({
+  // ...
+  enrichers: { entityId: 'customers.person' },
+})
+```
+
+### Key Rules
+
+- MUST implement `enrichMany()` for batch endpoints (prevents N+1 queries)
+- MUST namespace enriched fields with `_moduleName` prefix (e.g. `_example.todoCount`)
+- MUST use `features` array for ACL gating — enricher runs only if user has all listed features
+- Export fields are stripped: `_meta` and `_`-prefixed fields are removed from CSV/Excel exports
+- Enrichers run after `CrudHooks.afterList`, before HTTP response serialization
+- `critical: true` propagates errors to the HTTP response; `false` (default) uses fallback silently
+- Run `yarn generate` after adding `data/enrichers.ts` to auto-discover
 
 ## Upgrade Actions
 

@@ -27,6 +27,10 @@ Preferred local workflow for short iterations:
 2. Reuse the running environment from `.ai/qa/ephemeral-env.json`
 3. Use `/integration-tests` against that URL
 
+Discovery troubleshooting:
+- If Playwright reports `No tests found`, run `npx playwright test --config .ai/qa/tests/playwright.config.ts --list` first.
+- Keep `testIgnore` entries in `.ai/qa/tests/playwright.config.ts` scoped to absolute paths under `projectRoot`; avoid loose relative globs such as `.codex/**` that can match parent workspace paths.
+
 ---
 
 ## Directory Structure
@@ -414,6 +418,12 @@ TC-[CATEGORY]-[XXX]-[title].md
 | CRM | Customer/CRM Management |
 | ADMIN | System Administration |
 | INT | Integration Scenarios |
+| TRANS | Translations & Localisation |
+| AUD | Audit Logs |
+| CUR | Currencies & Exchange Rates |
+| STAFF | Staff & Team Management |
+| DICT | Dictionaries |
+| DIR | Directory (Organisations & Tenants) |
 | API-SYS | System & Maintenance APIs |
 | API-ENT | Custom Fields & Entities APIs |
 | API-BULK | Bulk Operations APIs |
