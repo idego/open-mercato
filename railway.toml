@@ -3,7 +3,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "cd /app/apps/mercato && yarn db:migrate && yarn start"
+startCommand = "/bin/sh /app/docker/scripts/railway-entrypoint.sh"
 healthcheckPath = "/"
 healthcheckTimeout = 360
 restartPolicyType = "ON_FAILURE"
