@@ -3,9 +3,8 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "yarn start"
-preDeployCommand = "/bin/sh /app/docker/scripts/railway-entrypoint.sh"
+startCommand = "/bin/sh /app/docker/scripts/railway-entrypoint.sh"
 healthcheckPath = "/"
-healthcheckTimeout = 120
+healthcheckTimeout = 1800
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
