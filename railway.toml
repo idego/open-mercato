@@ -3,7 +3,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "cd /app/apps/mercato && yarn start"
+startCommand = "yarn start"
 preDeployCommand = "/bin/sh /app/docker/scripts/railway-entrypoint.sh"
 healthcheckPath = "/"
 healthcheckTimeout = 120
