@@ -13,7 +13,7 @@ sudo chown -R omuser:omuser "${STORAGE_DIR}"
 
 if [ ! -f "${MARKER_FILE}" ]; then
   echo "First run: full initialization..."
-  yarn mercato init
+  yarn mercato init --no-examples
   touch "${MARKER_FILE}"
 else
   echo "Subsequent run: running migrations..."
