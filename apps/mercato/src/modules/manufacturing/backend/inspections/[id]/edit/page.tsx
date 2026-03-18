@@ -57,7 +57,7 @@ export default function EditInspectionPage({ params }: { params?: { id?: string 
         { value: 'CONDITIONAL', label: 'Conditional' },
       ],
     },
-    { id: 'inspection_date', label: t('manufacturing.inspections.form.date', 'Inspection Date'), type: 'text', placeholder: 'YYYY-MM-DD' },
+    { id: 'inspection_date', label: t('manufacturing.inspections.form.date', 'Inspection Date'), type: 'datepicker' },
     { id: 'defect_description', label: t('manufacturing.inspections.form.defects', 'Defect Description'), type: 'textarea' },
   ], [t])
 

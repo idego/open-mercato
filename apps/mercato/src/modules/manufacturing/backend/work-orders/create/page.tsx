@@ -3,10 +3,21 @@ import * as React from 'react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { CrudForm, type CrudField, type CrudFormGroup } from '@open-mercato/ui/backend/CrudForm'
 import { createCrud } from '@open-mercato/ui/backend/utils/crud'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+
+type CustomerOption = { id: string; display_name?: string; kind?: string }
+type CustomerListResponse = { items: CustomerOption[] }
 
 export default function CreateWorkOrderPage() {
   const t = useT()
+
+  const loadCustomerOptions = React.useCallback(async (query?: string) => {
+    const params = new URLSearchParams({ page: '1', pageSize: '20' })
+    if (query?.trim()) params.set('search', query.trim())
+    const call = await apiCall<CustomerListResponse>(`/api/customers/companies?${params}`)
+    return (call.result?.items ?? []).map(c => ({ value: c.id, label: c.display_name ?? c.id }))
+  }, [])
 
   const fields = React.useMemo<CrudField[]>(() => [
     { id: 'wo_number', label: t('manufacturing.workOrders.form.woNumber', 'WO Number'), type: 'text', required: true, placeholder: 'WO-2026-001' },
@@ -19,7 +30,12 @@ export default function CreateWorkOrderPage() {
         { value: 'CLOSED', label: 'Closed' },
       ],
     },
-    { id: 'customer_name', label: t('manufacturing.workOrders.form.customer', 'Customer'), type: 'text' },
+    {
+      id: 'customer_entity_id',
+      label: t('manufacturing.workOrders.form.customer', 'Customer'),
+      type: 'combobox',
+      loadOptions: loadCustomerOptions,
+    },
     {
       id: 'industry', label: t('manufacturing.workOrders.form.industry', 'Industry'), type: 'select',
       options: [
@@ -38,13 +54,13 @@ export default function CreateWorkOrderPage() {
     },
     { id: 'material', label: t('manufacturing.workOrders.form.material', 'Material'), type: 'text', placeholder: 'e.g. Inconel 718' },
     { id: 'quantity', label: t('manufacturing.workOrders.form.quantity', 'Quantity'), type: 'number' },
-    { id: 'due_date', label: t('manufacturing.workOrders.form.dueDate', 'Due Date'), type: 'text', placeholder: 'YYYY-MM-DD' },
+    { id: 'due_date', label: t('manufacturing.workOrders.form.dueDate', 'Due Date'), type: 'datepicker' },
     { id: 'materials_available', label: t('manufacturing.workOrders.form.materialsAvailable', 'Materials Available'), type: 'checkbox' },
     { id: 'notes', label: t('manufacturing.workOrders.form.notes', 'Notes'), type: 'textarea' },
-  ], [t])
+  ], [t, loadCustomerOptions])
 
   const groups = React.useMemo<CrudFormGroup[]>(() => [
-    { id: 'order', title: t('manufacturing.workOrders.form.groups.order', 'Order Details'), column: 1, fields: ['wo_number', 'customer_name', 'industry', 'material', 'quantity', 'due_date'] },
+    { id: 'order', title: t('manufacturing.workOrders.form.groups.order', 'Order Details'), column: 1, fields: ['wo_number', 'customer_entity_id', 'industry', 'material', 'quantity', 'due_date'] },
     { id: 'status', title: t('manufacturing.workOrders.form.groups.status', 'Status & Priority'), column: 2, fields: ['status', 'priority', 'materials_available', 'notes'] },
   ], [t])
 

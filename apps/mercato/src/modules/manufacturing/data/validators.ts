@@ -3,6 +3,7 @@ import { z } from 'zod'
 export const workOrderCreateSchema = z.object({
   wo_number: z.string().min(1).max(50),
   status: z.enum(['DRAFT', 'PLANNED', 'RELEASED', 'IN_PROGRESS', 'QC', 'COMPLETED', 'CLOSED']).optional().default('DRAFT'),
+  customer_entity_id: z.string().uuid().optional().nullable(),
   customer_name: z.string().max(200).optional().nullable(),
   industry: z.enum(['aerospace', 'energy', 'biomedical', 'semiconductor', 'machinery', 'marine', 'other']).optional().nullable(),
   priority: z.enum(['LOW', 'NORMAL', 'HIGH', 'URGENT']).optional().default('NORMAL'),
@@ -19,6 +20,7 @@ export const workOrderUpdateSchema = z.object({
   id: z.string().uuid(),
   wo_number: z.string().min(1).max(50).optional(),
   status: z.enum(['DRAFT', 'PLANNED', 'RELEASED', 'IN_PROGRESS', 'QC', 'COMPLETED', 'CLOSED']).optional(),
+  customer_entity_id: z.string().uuid().optional().nullable(),
   customer_name: z.string().max(200).optional().nullable(),
   industry: z.enum(['aerospace', 'energy', 'biomedical', 'semiconductor', 'machinery', 'marine', 'other']).optional().nullable(),
   priority: z.enum(['LOW', 'NORMAL', 'HIGH', 'URGENT']).optional(),
@@ -40,6 +42,7 @@ export const workOrderListSchema = z.object({
   status: z.string().optional(),
   priority: z.string().optional(),
   industry: z.string().optional(),
+  customer_entity_id: z.string().uuid().optional(),
   customer_name: z.string().optional(),
   wo_number: z.string().optional(),
   withDeleted: z.coerce.boolean().optional().default(false),

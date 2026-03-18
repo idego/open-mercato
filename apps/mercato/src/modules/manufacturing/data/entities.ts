@@ -11,6 +11,9 @@ export class WorkOrder {
   @Property({ type: 'text', default: 'DRAFT' })
   status: string = 'DRAFT'
 
+  @Property({ name: 'customer_entity_id', type: 'uuid', nullable: true })
+  customerEntityId?: string | null
+
   @Property({ name: 'customer_name', type: 'text', nullable: true })
   customerName?: string | null
 

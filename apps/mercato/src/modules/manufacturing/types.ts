@@ -2,6 +2,7 @@ export type WorkOrderListItem = {
   id: string
   wo_number: string
   status: string
+  customer_entity_id: string | null
   customer_name: string | null
   industry: string | null
   priority: string

@@ -15,6 +15,7 @@ export const workOrderListItemSchema = z.object({
   id: z.string(),
   wo_number: z.string(),
   status: z.string(),
+  customer_entity_id: z.string().uuid().nullable().optional(),
   customer_name: z.string().nullable().optional(),
   industry: z.string().nullable().optional(),
   priority: z.string(),

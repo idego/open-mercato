@@ -21,6 +21,7 @@ type SerializedWorkOrder = {
   id: string
   wo_number: string
   status: string
+  customer_entity_id: string | null
   customer_name: string | null
   industry: string | null
   priority: string
@@ -91,6 +92,7 @@ function serializeWorkOrder(wo: WorkOrder): SerializedWorkOrder {
     id: String(wo.id),
     wo_number: String(wo.woNumber),
     status: String(wo.status),
+    customer_entity_id: wo.customerEntityId ?? null,
     customer_name: wo.customerName ?? null,
     industry: wo.industry ?? null,
     priority: String(wo.priority),
@@ -111,13 +113,22 @@ const createCommand: CommandHandler<Record<string, unknown>, WorkOrder> = {
     const { parsed } = parseWithCustomFields(workOrderCreateSchema, rawInput)
     const scope = ensureScope(ctx)
     const de = ctx.container.resolve('dataEngine') as DataEngine
+    const em = ctx.container.resolve('em') as EntityManager
+
+    let customerName = parsed.customer_name ?? null
+    const customerEntityId = parsed.customer_entity_id ?? null
+    if (customerEntityId && !customerName) {
+      const customer = await em.findOne('CustomerEntity' as never, { id: customerEntityId } as FilterQuery<never>)
+      if (customer) customerName = (customer as { displayName?: string }).displayName ?? null
+    }
 
     const wo = await de.createOrmEntity({
       entity: WorkOrder,
       data: {
         woNumber: parsed.wo_number,
         status: parsed.status ?? 'DRAFT',
-        customerName: parsed.customer_name ?? null,
+        customerEntityId,
+        customerName,
         industry: parsed.industry ?? null,
         priority: parsed.priority ?? 'NORMAL',
         material: parsed.material ?? null,
@@ -188,12 +199,22 @@ const updateCommand: CommandHandler<Record<string, unknown>, WorkOrder> = {
     const scope = ensureScope(ctx)
     const de = ctx.container.resolve('dataEngine') as DataEngine
 
+    const em = ctx.container.resolve('em') as EntityManager
+    if (parsed.customer_entity_id !== undefined) {
+      const newCustId = parsed.customer_entity_id ?? null
+      if (newCustId && parsed.customer_name === undefined) {
+        const customer = await em.findOne('CustomerEntity' as never, { id: newCustId } as FilterQuery<never>)
+        if (customer) parsed.customer_name = (customer as { displayName?: string }).displayName ?? null
+      }
+    }
+
     const wo = await de.updateOrmEntity({
       entity: WorkOrder,
       where: { id: parsed.id, tenantId: scope.tenantId, organizationId: scope.organizationId, deletedAt: null } as FilterQuery<WorkOrder>,
       apply: (entity) => {
         if (parsed.wo_number !== undefined) entity.woNumber = parsed.wo_number
         if (parsed.status !== undefined) entity.status = parsed.status
+        if (parsed.customer_entity_id !== undefined) entity.customerEntityId = parsed.customer_entity_id ?? null
         if (parsed.customer_name !== undefined) entity.customerName = parsed.customer_name ?? null
         if (parsed.industry !== undefined) entity.industry = parsed.industry ?? null
         if (parsed.priority !== undefined) entity.priority = parsed.priority
@@ -220,7 +241,7 @@ const updateCommand: CommandHandler<Record<string, unknown>, WorkOrder> = {
     const before = snapshots.before as SerializedWorkOrder | undefined
     const after = serializeWorkOrder(result)
     const changes = buildChanges(before ?? null, after as unknown as Record<string, unknown>, [
-      'wo_number', 'status', 'customer_name', 'industry', 'priority', 'material', 'quantity', 'due_date', 'materials_available', 'notes',
+      'wo_number', 'status', 'customer_entity_id', 'customer_name', 'industry', 'priority', 'material', 'quantity', 'due_date', 'materials_available', 'notes',
     ])
     return {
       actionLabel: translate('manufacturing.audit.work_order.update', 'Update work order'),
@@ -242,6 +263,7 @@ const updateCommand: CommandHandler<Record<string, unknown>, WorkOrder> = {
       apply: (entity) => {
         entity.woNumber = before.wo_number
         entity.status = before.status
+        entity.customerEntityId = before.customer_entity_id
         entity.customerName = before.customer_name
         entity.industry = before.industry
         entity.priority = before.priority
@@ -312,6 +334,7 @@ const deleteCommand: CommandHandler<{ body?: Record<string, unknown>; query?: Re
       restored.deletedAt = null
       restored.woNumber = before.wo_number
       restored.status = before.status
+      restored.customerEntityId = before.customer_entity_id
       restored.customerName = before.customer_name
       restored.industry = before.industry
       restored.priority = before.priority
@@ -325,7 +348,7 @@ const deleteCommand: CommandHandler<{ body?: Record<string, unknown>; query?: Re
       restored = await de.createOrmEntity({
         entity: WorkOrder,
         data: {
-          id: before.id, woNumber: before.wo_number, status: before.status, customerName: before.customer_name,
+          id: before.id, woNumber: before.wo_number, status: before.status, customerEntityId: before.customer_entity_id, customerName: before.customer_name,
           industry: before.industry, priority: before.priority, material: before.material, quantity: before.quantity,
           dueDate: before.due_date, materialsAvailable: before.materials_available, notes: before.notes,
           tenantId: scope.tenantId, organizationId: scope.organizationId,

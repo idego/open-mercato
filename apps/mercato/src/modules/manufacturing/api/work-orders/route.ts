@@ -23,6 +23,7 @@ type BaseFields = {
   id: string
   wo_number: string
   status: string
+  customer_entity_id: string | null
   customer_name: string | null
   industry: string | null
   priority: string
@@ -54,7 +55,7 @@ export const { metadata, GET, POST, PUT, DELETE } = makeCrudRoute({
   list: {
     schema: workOrderListSchema,
     entityId: E.manufacturing.work_order,
-    fields: ['id', 'wo_number', 'status', 'customer_name', 'industry', 'priority', 'material', 'quantity', 'due_date', 'materials_available', 'tenant_id', 'organization_id', 'created_at'],
+    fields: ['id', 'wo_number', 'status', 'customer_entity_id', 'customer_name', 'industry', 'priority', 'material', 'quantity', 'due_date', 'materials_available', 'tenant_id', 'organization_id', 'created_at'],
     sortFieldMap: {
       id: 'id',
       wo_number: 'wo_number',
@@ -70,6 +71,7 @@ export const { metadata, GET, POST, PUT, DELETE } = makeCrudRoute({
       if (q.status) F.status = q.status
       if (q.priority) F.priority = q.priority
       if (q.industry) F.industry = q.industry
+      if (q.customer_entity_id) F.customer_entity_id = q.customer_entity_id
       if (q.customer_name) F.customer_name = { $ilike: `%${q.customer_name}%` }
       if (q.wo_number) F.wo_number = { $ilike: `%${q.wo_number}%` }
       return filters
@@ -78,6 +80,7 @@ export const { metadata, GET, POST, PUT, DELETE } = makeCrudRoute({
       id: String(item.id),
       wo_number: String(item.wo_number),
       status: String(item.status),
+      customer_entity_id: item.customer_entity_id ?? null,
       customer_name: item.customer_name ?? null,
       industry: item.industry ?? null,
       priority: String(item.priority),
